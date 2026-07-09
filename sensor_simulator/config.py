@@ -44,6 +44,8 @@ NORMAL_HUMIDITY = (35, 60)
 
 NORMAL_VIBRATION = (0.2, 2.0)
 
+NORMAL_FILAMENT_LEVEL = (0, 100)
+
 # ----------------------------
 # Print Jobs
 # ----------------------------

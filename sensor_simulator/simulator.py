@@ -13,6 +13,13 @@ from config import (
     HIGH_VIBRATION,
     HIGH_HUMIDITY,
 )
+from sensors import (
+    NozzleTemperatureSensor,
+    BedTemperatureSensor,
+    FilamentLevelSensor,
+    VibrationSensor,
+    HumiditySensor,
+)
 
 PRINT_JOBS = [
     "Gear Housing",
@@ -37,12 +44,21 @@ class Printer:
         # Printer State
         self.status = "Idle"
 
+        # Sensor definitions - ranges come from config.py, so editing
+        # NORMAL_NOZZLE_TEMP / NORMAL_VIBRATION / etc. there actually
+        # changes simulator behaviour instead of sitting unused.
+        self.nozzle_sensor = NozzleTemperatureSensor()
+        self.bed_sensor = BedTemperatureSensor()
+        self.filament_sensor = FilamentLevelSensor()
+        self.vibration_sensor = VibrationSensor()
+        self.humidity_sensor = HumiditySensor()
+
         # Sensor Values (Raw Sensors Only)
         self.nozzle_temp = 25.0
         self.bed_temp = 25.0
-        self.filament_level = 100.0
+        self.filament_level = self.filament_sensor.max_value
         self.vibration = 0.1
-        self.humidity = random.uniform(40, 50)
+        self.humidity = self.humidity_sensor.generate_value()
 
         # Print Job
         self.job_name = random.choice(PRINT_JOBS)
@@ -66,7 +82,7 @@ class Printer:
 
         elif self.status == "Heating":
 
-            if self.nozzle_temp >= 200:
+            if self.nozzle_temp >= self.nozzle_sensor.min_value:
                 self.status = "Printing"
 
         elif self.status == "Printing":
@@ -84,7 +100,7 @@ class Printer:
 
                 self.print_counter = 0
 
-                self.filament_level = 100
+                self.filament_level = self.filament_sensor.max_value
 
                 self.progress = 0
 
@@ -118,12 +134,12 @@ class Printer:
         elif self.status == "Heating":
 
             self.nozzle_temp = min(
-                215,
+                self.nozzle_sensor.min_value,
                 self.nozzle_temp + 12
             )
 
             self.bed_temp = min(
-                60,
+                self.bed_sensor.min_value,
                 self.bed_temp + 5
             )
 
@@ -143,10 +159,7 @@ class Printer:
                 )
             )
 
-            self.vibration = random.uniform(
-                0.5,
-                1.5
-            )
+            self.vibration = self.vibration_sensor.generate_value()
 
             self.progress = min(
                 100,
@@ -183,9 +196,9 @@ class Printer:
         )
 
         self.humidity = max(
-            30,
+            self.humidity_sensor.min_value,
             min(
-                60,
+                self.humidity_sensor.max_value,
                 self.humidity
             )
         )

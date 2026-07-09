@@ -1,10 +1,11 @@
 import random
+
 from config import (
-    NOZZLE_TEMP,
-    BED_TEMP,
-    FILAMENT_LEVEL,
-    VIBRATION,
-    HUMIDITY,
+    NORMAL_NOZZLE_TEMP,
+    NORMAL_BED_TEMP,
+    NORMAL_FILAMENT_LEVEL,
+    NORMAL_VIBRATION,
+    NORMAL_HUMIDITY,
 )
 
 
@@ -21,49 +22,54 @@ class Sensor:
 
 class NozzleTemperatureSensor(Sensor):
     def __init__(self):
+        min_value, max_value = NORMAL_NOZZLE_TEMP
         super().__init__(
             "Nozzle Temperature",
-            NOZZLE_TEMP["min"],
-            NOZZLE_TEMP["max"],
+            min_value,
+            max_value,
             "°C"
         )
 
 
 class BedTemperatureSensor(Sensor):
     def __init__(self):
+        min_value, max_value = NORMAL_BED_TEMP
         super().__init__(
             "Bed Temperature",
-            BED_TEMP["min"],
-            BED_TEMP["max"],
+            min_value,
+            max_value,
             "°C"
         )
 
 
 class FilamentLevelSensor(Sensor):
     def __init__(self):
+        min_value, max_value = NORMAL_FILAMENT_LEVEL
         super().__init__(
             "Filament Level",
-            FILAMENT_LEVEL["min"],
-            FILAMENT_LEVEL["max"],
+            min_value,
+            max_value,
             "%"
         )
 
 
 class VibrationSensor(Sensor):
     def __init__(self):
+        min_value, max_value = NORMAL_VIBRATION
         super().__init__(
             "Vibration",
-            VIBRATION["min"],
-            VIBRATION["max"],
+            min_value,
+            max_value,
             "mm/s"
         )
 
 
 class HumiditySensor(Sensor):
     def __init__(self):
+        min_value, max_value = NORMAL_HUMIDITY
         super().__init__(
             "Humidity",
-            HUMIDITY["min"],
-            HUMIDITY["max"],
+            min_value,
+            max_value,
             "%"
         )

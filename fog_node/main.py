@@ -8,8 +8,11 @@ from health_calculator import HealthCalculator
 from recommendation_engine import RecommendationEngine
 from aggregator import Aggregator
 from batch_manager import BatchManager
+from buffer import RetryBuffer
 from config import BATCH_SIZE
+from logger import get_logger
 
+log = get_logger("main")
 
 processor = Processor()
 
@@ -24,6 +27,11 @@ aggregator = Aggregator()
 batch_manager = BatchManager(BATCH_SIZE)
 
 dispatcher = Dispatcher()
+
+# Retry buffer: if send_to_cloud() fails, the batch is saved here and
+# retried automatically in the background every RETRY_INTERVAL seconds.
+retry_buffer = RetryBuffer(dispatcher.send_to_cloud)
+retry_buffer.start_background_retry()
 
 
 def process_message(data):
@@ -123,14 +131,20 @@ def process_message(data):
 
         print("=" * 80)
 
-        #
-        # Next Phase:
-        #
-        # dispatcher.send_to_cloud(batch)
-        #
-        # This will send the batch to
-        # AWS API Gateway.
-        #
+        # -----------------------------
+        # Cloud Dispatch (with fallback)
+        # -----------------------------
+
+        success = dispatcher.send_to_cloud(batch)
+
+        if success:
+            log.info("Batch %s dispatched to cloud", batch["batch_id"])
+        else:
+            log.warning(
+                "Batch %s could not be sent - saving to retry buffer",
+                batch["batch_id"],
+            )
+            retry_buffer.save(batch)
 
 
 subscriber = MQTTSubscriber(process_message)
