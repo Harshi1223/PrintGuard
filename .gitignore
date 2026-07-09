@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# SQLite
+*.db
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Python Cache
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Build
+build/
+dist/
+
+# Secrets
+.env.local
+
+# Buffer files
+buffer.json
