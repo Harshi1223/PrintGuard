@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - main
+      - master
+
   pull_request:
     branches:
       - main
+      - master
 
 jobs:
 
@@ -32,23 +35,30 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
-      - name: Install Sensor Simulator Dependencies
+      - name: Install Project Dependencies
         run: |
-          if [ -f sensor_simulator/requirements.txt ]; then
-            pip install -r sensor_simulator/requirements.txt
-          fi
+          pip install -r requirements.txt
 
-      - name: Install Fog Node Dependencies
+      - name: Install Pylint
         run: |
-          if [ -f fog_node/requirements.txt ]; then
-            pip install -r fog_node/requirements.txt
-          fi
+          pip install pylint
 
-      - name: Verify Python Files Compile
+      - name: Compile Sensor Simulator
         run: |
           python -m compileall sensor_simulator
+
+      - name: Compile Fog Node
+        run: |
           python -m compileall fog_node
 
-      - name: List Project Structure
+      - name: Run Pylint (Sensor Simulator)
+        run: |
+          pylint sensor_simulator --fail-under=7 || true
+
+      - name: Run Pylint (Fog Node)
+        run: |
+          pylint fog_node --fail-under=7 || true
+
+      - name: Display Project Structure
         run: |
           ls -R
