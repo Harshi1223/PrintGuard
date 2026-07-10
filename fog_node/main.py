@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 
 from subscriber import MQTTSubscriber
@@ -10,9 +13,9 @@ from aggregator import Aggregator
 from batch_manager import BatchManager
 from buffer import RetryBuffer
 from config import BATCH_SIZE
-from logger import get_logger
+import logger
 
-log = get_logger("main")
+log = logger.get_logger("main")
 
 processor = Processor()
 

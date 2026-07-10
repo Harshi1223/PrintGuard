@@ -46,11 +46,17 @@ LOG_FILE = "fog.log"
 # AWS Configuration
 # =====================================================
 
-# Replace after creating API Gateway
+AWS_REGION = "us-east-1"
 
+# SQS queue the fog node publishes batches to directly (ingestion path).
+# Fill in after creating the queue in the SQS console.
+SQS_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/503148390993/printguard-batches-queue"
+
+# API Gateway base URL - used for the READ-side REST API that the
+# dashboard consumes (GET /printers, GET /alerts, etc). Not used for
+# ingestion - the fog node publishes straight to SQS instead, since
+# ingestion doesn't need HTTP routing overhead.
 API_GATEWAY_URL = ""
-
-AWS_REGION = "eu-west-1"
 
 # =====================================================
 # Health Thresholds

@@ -1,13 +1,24 @@
 import json
-import requests
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
-from config import API_GATEWAY_URL
+from config import SQS_QUEUE_URL, AWS_REGION
 import logger
 
 log = logger.get_logger("dispatcher")
 
 
 class Dispatcher:
+
+    def __init__(self):
+        # Created once and reused - boto3 clients are thread-safe and
+        # opening a new one per call would add needless overhead.
+        self._sqs_client = None
+
+    def _get_sqs_client(self):
+        if self._sqs_client is None:
+            self._sqs_client = boto3.client("sqs", region_name=AWS_REGION)
+        return self._sqs_client
 
     def dispatch(
         self,
@@ -50,38 +61,40 @@ class Dispatcher:
 
     def send_to_cloud(self, batch):
         """
-        Attempt to send a completed batch to AWS via API Gateway.
+        Publish a completed batch directly to the SQS ingestion queue.
         Returns True only on a confirmed successful send - the caller
         (main.py) is responsible for buffering the batch via
         RetryBuffer when this returns False.
         """
 
-        if not API_GATEWAY_URL:
+        if not SQS_QUEUE_URL:
             log.warning(
-                "API_GATEWAY_URL not configured - treating backend as unreachable"
+                "SQS_QUEUE_URL not configured - treating backend as unreachable"
             )
             return False
 
         try:
-            response = requests.post(
-                API_GATEWAY_URL,
-                json=batch,
-                timeout=5,
+            client = self._get_sqs_client()
+
+            response = client.send_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MessageBody=json.dumps(batch),
+                MessageAttributes={
+                    "batch_id": {
+                        "DataType": "String",
+                        "StringValue": batch.get("batch_id", "unknown"),
+                    }
+                },
             )
 
-            if response.status_code < 300:
-                log.info(
-                    "Batch %s sent to cloud (status %s)",
-                    batch.get("batch_id"), response.status_code,
-                )
-                return True
+            message_id = response.get("MessageId")
 
-            log.warning(
-                "Cloud rejected batch %s (status %s)",
-                batch.get("batch_id"), response.status_code,
+            log.info(
+                "Batch %s sent to SQS (MessageId %s)",
+                batch.get("batch_id"), message_id,
             )
-            return False
+            return True
 
-        except requests.RequestException as exc:
-            log.warning("Could not reach cloud backend: %s", exc)
+        except (BotoCoreError, ClientError) as exc:
+            log.warning("Could not reach SQS: %s", exc)
             return False
