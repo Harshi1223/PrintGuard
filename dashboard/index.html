@@ -599,7 +599,7 @@
     const remainingPct = 100 - currentProgress;
     const remainingSec = remainingPct / ratePerSec;
 
-    if (!Number.isFinite(remainingSec) || remainingSec < 0) return null;
+    if (!isFinite(remainingSec) || remainingSec < 0) return null;
 
     const mins = Math.round(remainingSec / 60);
     if (mins < 1) return "< 1 min remaining";
@@ -769,7 +769,7 @@
 
   el.refreshBtn.addEventListener("click", refresh);
 
-  await refresh();
+  refresh();
   startPolling();
 </script>
 

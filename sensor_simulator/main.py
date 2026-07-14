@@ -10,7 +10,7 @@ def main():
 
     simulator = PrinterFarmSimulator()
 
-    publisher = MQTTPublisher()
+    publisher = MQTTPublisher(command_handler=simulator.handle_command)
 
     while True:
 

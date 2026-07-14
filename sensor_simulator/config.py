@@ -121,3 +121,5 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "printguard/sensors"
 
 MQTT_CLIENT_ID = "printguard-simulator"
+
+MQTT_COMMANDS_TOPIC = "printguard/commands"

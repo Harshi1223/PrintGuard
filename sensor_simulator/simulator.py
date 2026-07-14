@@ -53,8 +53,7 @@ class JobQueue:
 
     def _refill(self):
         batch = list(self._seed)
-        # Use SystemRandom to avoid linter warning about insecure PRNG (S2245)
-        random.SystemRandom().shuffle(batch)
+        random.shuffle(batch)
         self._queue.extend(batch)
 
     def next_job(self):
@@ -105,6 +104,11 @@ class Printer:
         self.active_fault = None
         self.fault_duration = 0
 
+        # Halt state (set externally by the fog node's HALT command).
+        # Additive - printers start un-halted, and normal behaviour is
+        # completely unaffected unless receive_halt_command() is called.
+        self.halted_counter = 0
+
         # Internal Counter
         self.print_counter = 0
 
@@ -123,12 +127,40 @@ class Printer:
             self.material_thresholds = MATERIALS.get(
                 self.material, MATERIALS[DEFAULT_MATERIAL]
             )
-        except (KeyError, AttributeError):
+        except Exception:
             self.job_name = random.choice(PRINT_JOBS)
             self.material = DEFAULT_MATERIAL
             self.material_thresholds = MATERIALS.get(DEFAULT_MATERIAL)
 
+    def receive_halt_command(self):
+        """
+        Called when the fog node sends a HALT command for this printer
+        (a Critical-severity alert, e.g. Nozzle Overheat). Simulates the
+        printer physically stopping: clears any in-progress fault (the
+        dangerous condition is being addressed), stops printing, and
+        starts cooling passively. Auto-resumes to Cooling after a short
+        halted period, simulating an operator having intervened.
+        """
+        self.status = "Halted"
+        self.halted_counter = 0
+        self.active_fault = None
+        self.fault_duration = 0
+        self.vibration = 0.0
+
     def update_status(self):
+
+        if self.status == "Halted":
+
+            self.halted_counter += 1
+
+            # Simulates an operator having addressed the issue after a
+            # short window - printer moves to Cooling, then rejoins the
+            # normal Idle/Heating/Printing/Cooling cycle as usual.
+            if self.halted_counter >= 5:
+                self.status = "Cooling"
+                self.halted_counter = 0
+
+            return
 
         if self.status == "Idle":
 
@@ -151,26 +183,43 @@ class Printer:
             if self.progress >= 100:
                 self.status = "Cooling"
 
-        elif self.status == "Cooling" and self.nozzle_temp <= 35:
+        elif self.status == "Cooling":
 
-            self.status = "Idle"
+            if self.nozzle_temp <= 35:
 
-            self.print_counter = 0
+                self.status = "Idle"
 
-            self.filament_level = self.filament_sensor.max_value
+                self.print_counter = 0
 
-            self.progress = 0
+                self.filament_level = self.filament_sensor.max_value
 
-            self.current_layer = 0
+                self.progress = 0
 
-            self.total_layers = random.randint(
-                180,
-                350
-            )
+                self.current_layer = 0
 
-            self._assign_next_job()
+                self.total_layers = random.randint(
+                    180,
+                    350
+                )
+
+                self._assign_next_job()
 
     def update_sensor_values(self):
+
+        if self.status == "Halted":
+
+            # Heater is off - nozzle/bed cool passively, same rate as
+            # Cooling state. No vibration since the printer has stopped.
+            self.nozzle_temp = max(25, self.nozzle_temp - 8)
+            self.bed_temp = max(25, self.bed_temp - 4)
+            self.vibration = 0.0
+
+            self.humidity += random.uniform(-0.3, 0.3)
+            self.humidity = max(
+                self.humidity_sensor.min_value,
+                min(self.humidity_sensor.max_value, self.humidity),
+            )
+            return
 
         if self.status == "Idle":
 
@@ -272,6 +321,12 @@ class Printer:
         These are used only to generate realistic sensor values.
         The Fog Node will independently detect the faults.
         """
+
+        # No new or continuing faults while halted - receive_halt_command()
+        # already cleared any active fault; this guard just prevents a new
+        # one from starting during the halted window.
+        if self.status == "Halted":
+            return
 
         # Continue existing fault
 
@@ -414,6 +469,29 @@ class PrinterFarmSimulator:
             for i in range(NUMBER_OF_PRINTERS)
 
         ]
+
+    def get_printer(self, printer_id):
+        for printer in self.printers:
+            if printer.printer_id == printer_id:
+                return printer
+        return None
+
+    def handle_command(self, printer_id, command, reason=None):
+        """
+        Called by MQTTPublisher when a command arrives from the fog node
+        on printguard/commands. Currently only "HALT" is recognised;
+        anything else is logged and ignored rather than causing an error.
+        """
+        printer = self.get_printer(printer_id)
+        if printer is None:
+            print(f"HALT command for unknown printer_id: {printer_id}")
+            return
+
+        if command == "HALT":
+            print(f"Halting {printer_id} (reason: {reason})")
+            printer.receive_halt_command()
+        else:
+            print(f"Ignoring unrecognised command '{command}' for {printer_id}")
 
     def generate_all_data(self):
 

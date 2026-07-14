@@ -4,6 +4,7 @@ import paho.mqtt.client as mqtt
 from config import MQTT_BROKER
 from config import MQTT_PORT
 from config import MQTT_TOPIC
+import config
 
 
 class MQTTSubscriber:
@@ -45,6 +46,21 @@ class MQTTSubscriber:
         data = json.loads(msg.payload.decode())
 
         self.callback(data)
+
+    def publish_command(self, printer_id, command, reason=None):
+        """
+        Publishes a command (e.g. "HALT") back to the sensor simulator
+        for a specific printer, on MQTT_COMMANDS_TOPIC. Uses the same
+        already-connected client this subscriber is using for incoming
+        sensor data - paho-mqtt clients support publishing and
+        subscribing on one connection.
+        """
+        payload = json.dumps({
+            "printer_id": printer_id,
+            "command": command,
+            "reason": reason,
+        })
+        self.client.publish(config.MQTT_COMMANDS_TOPIC, payload)
 
     def start(self):
 

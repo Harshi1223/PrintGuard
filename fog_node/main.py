@@ -5,41 +5,41 @@ import json
 
 from subscriber import MQTTSubscriber
 from processor import Processor
-import anomaly_detector
-import trend_detector as trend_detector_
-import dispatcher as dispatcher_
-import health_calculator
-import recommendation_engine
-import aggregator as aggregator_
-import batch_manager as batch_manager_
-import buffer
-import config
+from anomaly_detector import AnomalyDetector
+from trend_detector import TrendDetector
+from dispatcher import Dispatcher
+from health_calculator import HealthCalculator
+from recommendation_engine import RecommendationEngine
+from aggregator import Aggregator
+from batch_manager import BatchManager
+from buffer import RetryBuffer
+from config import BATCH_SIZE
 import logger
 
 log = logger.get_logger("main")
 
 processor = Processor()
 
-detector = anomaly_detector.AnomalyDetector()
+detector = AnomalyDetector()
 
 # Novel addition: flags a sensor value trending upward across recent
 # readings, BEFORE it crosses the hard threshold that AnomalyDetector
 # checks - not present in standard threshold-based monitoring tools.
-trend_detector = trend_detector_.TrendDetector()
+trend_detector = TrendDetector()
 
-health = health_calculator.HealthCalculator()
+health = HealthCalculator()
 
-recommendation = recommendation_engine.RecommendationEngine()
+recommendation = RecommendationEngine()
 
-aggregator = aggregator_.Aggregator()
+aggregator = Aggregator()
 
-batch_manager = batch_manager_.BatchManager(config.BATCH_SIZE)
+batch_manager = BatchManager(BATCH_SIZE)
 
-dispatcher = dispatcher_.Dispatcher()
+dispatcher = Dispatcher()
 
 # Retry buffer: if send_to_cloud() fails, the batch is saved here and
 # retried automatically in the background every RETRY_INTERVAL seconds.
-retry_buffer = buffer.RetryBuffer(dispatcher.send_to_cloud)
+retry_buffer = RetryBuffer(dispatcher.send_to_cloud)
 retry_buffer.start_background_retry()
 
 
@@ -75,6 +75,24 @@ def process_message(data):
     health_score, health_status = health.calculate(
         processed
     )
+
+    # -----------------------------
+    # Halt Trigger (Critical only)
+    # -----------------------------
+    # Only Critical severity halts the printer - Medium/High-severity
+    # alerts (Low Filament, High Humidity, Bed Overheat, High Vibration)
+    # and Early Warning trend alerts stay as warnings only, since halting
+    # on those either wastes a recoverable print or defeats the purpose
+    # of an early warning. Critical (Nozzle Overheat) is the one condition
+    # that is dangerous right now and worsens if ignored.
+
+    if health_status == "Critical":
+        critical_alerts = [a["type"] for a in alerts if a.get("severity") == "Critical"]
+        subscriber.publish_command(
+            processed["printer_id"],
+            "HALT",
+            reason=", ".join(critical_alerts) if critical_alerts else "Critical health status",
+        )
 
     # -----------------------------
     # Generate Recommendations
