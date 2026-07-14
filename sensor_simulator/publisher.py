@@ -44,12 +44,10 @@ class MQTTPublisher:
 
                 break
 
-            except Exception as e:
-
+            except OSError as e:
+                # Catch expected connection-related errors only
                 print("Connection Failed:", e)
-
                 print("Retrying in 5 seconds...")
-
                 time.sleep(5)
 
     

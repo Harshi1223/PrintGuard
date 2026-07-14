@@ -1,7 +1,7 @@
 import json
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import (
     NUMBER_OF_PRINTERS,
@@ -12,6 +12,9 @@ from config import (
     LOW_FILAMENT,
     HIGH_VIBRATION,
     HIGH_HUMIDITY,
+    MATERIALS,
+    DEFAULT_MATERIAL,
+    JOB_QUEUE_SEED,
 )
 from sensors import (
     NozzleTemperatureSensor,
@@ -33,6 +36,35 @@ PRINT_JOBS = [
     "Motor Casing",
     "Custom Enclosure",
 ]
+
+
+class JobQueue:
+    """
+    Simple FIFO job queue shared by the whole farm - pulls the next job
+    (name + material) for the next printer that finishes its current one.
+    Refills itself (reshuffled) whenever it runs empty, so the farm never
+    stalls waiting for work.
+    """
+
+    def __init__(self, seed_jobs):
+        self._seed = seed_jobs
+        self._queue = []
+        self._refill()
+
+    def _refill(self):
+        batch = list(self._seed)
+        # Use SystemRandom to avoid linter warning about insecure PRNG (S2245)
+        random.SystemRandom().shuffle(batch)
+        self._queue.extend(batch)
+
+    def next_job(self):
+        if not self._queue:
+            self._refill()
+        return self._queue.pop(0)
+
+
+# Shared across all Printer instances - one farm-wide queue, not one per printer.
+JOB_QUEUE = JobQueue(JOB_QUEUE_SEED)
 
 
 class Printer:
@@ -60,8 +92,11 @@ class Printer:
         self.vibration = 0.1
         self.humidity = self.humidity_sensor.generate_value()
 
-        # Print Job
-        self.job_name = random.choice(PRINT_JOBS)
+        # Print Job - pulled from the shared farm queue instead of picked
+        # randomly forever. Falls back safely to PRINT_JOBS/DEFAULT_MATERIAL
+        # if anything about the queue/material lookup is ever unavailable.
+        self._assign_next_job()
+
         self.progress = 0.0
         self.current_layer = 0
         self.total_layers = random.randint(180, 350)
@@ -73,6 +108,26 @@ class Printer:
         # Internal Counter
         self.print_counter = 0
 
+    def _assign_next_job(self):
+        """
+        Pulls the next job off the shared farm queue and sets this
+        printer's material-specific thresholds accordingly. Wrapped in a
+        try/except so that if JOB_QUEUE or MATERIALS is ever unavailable
+        for any reason, the printer falls back to the original random
+        job-name behaviour rather than crashing.
+        """
+        try:
+            job = JOB_QUEUE.next_job()
+            self.job_name = job["job_name"]
+            self.material = job.get("material", DEFAULT_MATERIAL)
+            self.material_thresholds = MATERIALS.get(
+                self.material, MATERIALS[DEFAULT_MATERIAL]
+            )
+        except (KeyError, AttributeError):
+            self.job_name = random.choice(PRINT_JOBS)
+            self.material = DEFAULT_MATERIAL
+            self.material_thresholds = MATERIALS.get(DEFAULT_MATERIAL)
+
     def update_status(self):
 
         if self.status == "Idle":
@@ -82,7 +137,11 @@ class Printer:
 
         elif self.status == "Heating":
 
-            if self.nozzle_temp >= self.nozzle_sensor.min_value:
+            target_nozzle = (self.material_thresholds or {}).get(
+                "normal_nozzle_temp", (self.nozzle_sensor.min_value, None)
+            )[0]
+
+            if self.nozzle_temp >= target_nozzle:
                 self.status = "Printing"
 
         elif self.status == "Printing":
@@ -92,28 +151,24 @@ class Printer:
             if self.progress >= 100:
                 self.status = "Cooling"
 
-        elif self.status == "Cooling":
+        elif self.status == "Cooling" and self.nozzle_temp <= 35:
 
-            if self.nozzle_temp <= 35:
+            self.status = "Idle"
 
-                self.status = "Idle"
+            self.print_counter = 0
 
-                self.print_counter = 0
+            self.filament_level = self.filament_sensor.max_value
 
-                self.filament_level = self.filament_sensor.max_value
+            self.progress = 0
 
-                self.progress = 0
+            self.current_layer = 0
 
-                self.current_layer = 0
+            self.total_layers = random.randint(
+                180,
+                350
+            )
 
-                self.total_layers = random.randint(
-                    180,
-                    350
-                )
-
-                self.job_name = random.choice(
-                    PRINT_JOBS
-                )
+            self._assign_next_job()
 
     def update_sensor_values(self):
 
@@ -133,13 +188,21 @@ class Printer:
 
         elif self.status == "Heating":
 
+            target_nozzle = (self.material_thresholds or {}).get(
+                "normal_nozzle_temp", (self.nozzle_sensor.min_value, None)
+            )[0]
+
+            target_bed = (self.material_thresholds or {}).get(
+                "normal_bed_temp", (self.bed_sensor.min_value, None)
+            )[0]
+
             self.nozzle_temp = min(
-                self.nozzle_sensor.min_value,
+                target_nozzle,
                 self.nozzle_temp + 12
             )
 
             self.bed_temp = min(
-                self.bed_sensor.min_value,
+                target_bed,
                 self.bed_temp + 5
             )
 
@@ -218,14 +281,20 @@ class Printer:
 
             if self.active_fault == "Nozzle Overheat":
 
+                nozzle_overheat_range = (self.material_thresholds or {}).get(
+                    "nozzle_overheat", NOZZLE_OVERHEAT
+                )
                 self.nozzle_temp = random.uniform(
-                    *NOZZLE_OVERHEAT
+                    *nozzle_overheat_range
                 )
 
             elif self.active_fault == "Bed Overheat":
 
+                bed_overheat_range = (self.material_thresholds or {}).get(
+                    "bed_overheat", BED_OVERHEAT
+                )
                 self.bed_temp = random.uniform(
-                    *BED_OVERHEAT
+                    *bed_overheat_range
                 )
 
             elif self.active_fault == "Low Filament":
@@ -290,11 +359,13 @@ class Printer:
 
             "printer_id": self.printer_id,
 
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
 
             "status": self.status,
 
             "job_name": self.job_name,
+
+            "material": getattr(self, "material", DEFAULT_MATERIAL),
 
             "progress": round(
                 self.progress,

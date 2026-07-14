@@ -5,35 +5,41 @@ import json
 
 from subscriber import MQTTSubscriber
 from processor import Processor
-from anomaly_detector import AnomalyDetector
-from dispatcher import Dispatcher
-from health_calculator import HealthCalculator
-from recommendation_engine import RecommendationEngine
-from aggregator import Aggregator
-from batch_manager import BatchManager
-from buffer import RetryBuffer
-from config import BATCH_SIZE
+import anomaly_detector
+import trend_detector as trend_detector_
+import dispatcher as dispatcher_
+import health_calculator
+import recommendation_engine
+import aggregator as aggregator_
+import batch_manager as batch_manager_
+import buffer
+import config
 import logger
 
 log = logger.get_logger("main")
 
 processor = Processor()
 
-detector = AnomalyDetector()
+detector = anomaly_detector.AnomalyDetector()
 
-health = HealthCalculator()
+# Novel addition: flags a sensor value trending upward across recent
+# readings, BEFORE it crosses the hard threshold that AnomalyDetector
+# checks - not present in standard threshold-based monitoring tools.
+trend_detector = trend_detector_.TrendDetector()
 
-recommendation = RecommendationEngine()
+health = health_calculator.HealthCalculator()
 
-aggregator = Aggregator()
+recommendation = recommendation_engine.RecommendationEngine()
 
-batch_manager = BatchManager(BATCH_SIZE)
+aggregator = aggregator_.Aggregator()
 
-dispatcher = Dispatcher()
+batch_manager = batch_manager_.BatchManager(config.BATCH_SIZE)
+
+dispatcher = dispatcher_.Dispatcher()
 
 # Retry buffer: if send_to_cloud() fails, the batch is saved here and
 # retried automatically in the background every RETRY_INTERVAL seconds.
-retry_buffer = RetryBuffer(dispatcher.send_to_cloud)
+retry_buffer = buffer.RetryBuffer(dispatcher.send_to_cloud)
 retry_buffer.start_background_retry()
 
 
@@ -53,6 +59,14 @@ def process_message(data):
     # -----------------------------
 
     alerts = detector.detect(processed)
+
+    # -----------------------------
+    # Detect Trends (early warning, before hard threshold is crossed)
+    # -----------------------------
+
+    trend_alerts = trend_detector.check(processed)
+
+    alerts = alerts + trend_alerts
 
     # -----------------------------
     # Calculate Health

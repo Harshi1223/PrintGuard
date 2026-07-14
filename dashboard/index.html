@@ -554,16 +554,18 @@
     }).join("");
   }
 
-  function sparklineSvg(values) {
-    if (!values || values.length < 2) {
+  function dualTempChartSvg(nozzleValues, bedValues) {
+    if (!nozzleValues || nozzleValues.length < 2) {
       return `<div class="sparkline-caption">Not enough history yet for a trend.</div>`;
     }
-    const w = 260, h = 40, pad = 4;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const w = 260, h = 60, pad = 6;
+    const all = nozzleValues.concat(bedValues);
+    const min = Math.min(...all);
+    const max = Math.max(...all);
     const range = max - min || 1;
-    const step = (w - pad * 2) / (values.length - 1);
-    const points = values.map((v, i) => {
+    const step = (w - pad * 2) / (nozzleValues.length - 1);
+
+    const toPoints = (values) => values.map((v, i) => {
       const x = pad + i * step;
       const y = h - pad - ((v - min) / range) * (h - pad * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
@@ -571,9 +573,56 @@
 
     return `
       <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
-        <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
+        <polyline points="${toPoints(nozzleValues)}" fill="none" stroke="var(--critical)" stroke-width="1.5" />
+        <polyline points="${toPoints(bedValues)}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
       </svg>
-      <div class="sparkline-caption">Nozzle temp, last ${values.length} readings · ${fmtNum(min, 0)}–${fmtNum(max, 0)}°C</div>
+      <div class="sparkline-caption">
+        <span style="color:var(--critical)">■</span> Nozzle &nbsp;
+        <span style="color:var(--accent)">■</span> Bed &nbsp;·&nbsp;
+        last ${nozzleValues.length} readings · ${fmtNum(min, 0)}–${fmtNum(max, 0)}°C
+      </div>
+    `;
+  }
+
+  function estimateTimeRemaining(history, currentProgress) {
+    const withProgress = history.filter(r => r.progress !== undefined && r.timestamp);
+    if (withProgress.length < 2 || currentProgress === undefined || currentProgress >= 100) {
+      return null;
+    }
+    const first = withProgress[0];
+    const last = withProgress[withProgress.length - 1];
+    const progressDelta = last.progress - first.progress;
+    const timeDeltaSec = (new Date(last.timestamp) - new Date(first.timestamp)) / 1000;
+    if (progressDelta <= 0 || timeDeltaSec <= 0) return null;
+
+    const ratePerSec = progressDelta / timeDeltaSec; // % per second
+    const remainingPct = 100 - currentProgress;
+    const remainingSec = remainingPct / ratePerSec;
+
+    if (!Number.isFinite(remainingSec) || remainingSec < 0) return null;
+
+    const mins = Math.round(remainingSec / 60);
+    if (mins < 1) return "< 1 min remaining";
+    if (mins < 60) return `~${mins} min remaining`;
+    return `~${(mins / 60).toFixed(1)} hr remaining`;
+  }
+
+  const STATE_COLOR = {
+    Idle: "var(--idle)",
+    Heating: "var(--warning)",
+    Printing: "var(--accent)",
+    Cooling: "var(--healthy)",
+  };
+
+  function stateTimelineHtml(history) {
+    if (!history || history.length === 0) return "";
+    const segments = history.map(r => {
+      const color = STATE_COLOR[r.status] || "var(--idle)";
+      return `<span title="${escapeHtml(r.status)} @ ${escapeHtml(r.timestamp)}" style="flex:1;background:${color};height:100%;display:inline-block;"></span>`;
+    }).join("");
+    return `
+      <div class="bar-label"><span>State timeline (oldest → newest)</span></div>
+      <div style="display:flex;height:14px;border-radius:4px;overflow:hidden;gap:1px;background:#0d0f12;">${segments}</div>
     `;
   }
 
@@ -595,11 +644,19 @@
 
     try {
       const data = await apiGet(`/printers/${encodeURIComponent(printerId)}/history`);
-      const temps = (data.history || [])
-        .map(r => r.nozzle_temperature)
-        .filter(v => v !== undefined && v !== null)
-        .reverse(); // oldest -> newest for a left-to-right trend line
-      panel.innerHTML = `<div class="sparkline-wrap">${sparklineSvg(temps)}</div>`;
+      const history = (data.history || []).slice().reverse(); // oldest -> newest
+      const nozzleTemps = history.map(r => r.nozzle_temperature).filter(v => v !== undefined && v !== null);
+      const bedTemps = history.map(r => r.bed_temperature).filter(v => v !== undefined && v !== null);
+
+      const card = btn.closest(".card");
+      const currentProgress = card ? Number(card.dataset.progress) : undefined;
+      const timeEstimate = estimateTimeRemaining(history, currentProgress);
+
+      panel.innerHTML = `
+        <div class="sparkline-wrap">${dualTempChartSvg(nozzleTemps, bedTemps)}</div>
+        ${timeEstimate ? `<div class="bar-label" style="margin-top:8px;"><span>Time estimate</span><span>${escapeHtml(timeEstimate)}</span></div>` : ""}
+        <div style="margin-top:10px;">${stateTimelineHtml(history)}</div>
+      `;
     } catch (err) {
       panel.innerHTML = `<div class="sparkline-caption">Couldn't load history (${escapeHtml(err.message)}).</div>`;
     }
@@ -612,7 +669,7 @@
     const wasOpen = openHistoryCards.has(p.printer_id);
 
     return `
-      <div class="card" style="--status-color:${statusColor}">
+      <div class="card" data-progress="${p.progress !== undefined ? p.progress : ''}" style="--status-color:${statusColor}">
         <div class="card-top">
           <div>
             <div class="printer-id">${escapeHtml(p.printer_id)}</div>
@@ -712,7 +769,7 @@
 
   el.refreshBtn.addEventListener("click", refresh);
 
-  refresh();
+  await refresh();
   startPolling();
 </script>
 

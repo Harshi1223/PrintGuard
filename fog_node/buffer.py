@@ -32,20 +32,20 @@ class RetryBuffer:
 
     def _ensure_file(self):
         if not os.path.exists(BUFFER_FILE):
-            with open(BUFFER_FILE, "w") as f:
+            with open(BUFFER_FILE, "w", encoding="utf-8") as f:
                 json.dump([], f)
 
     def _read_all(self):
         with self.lock:
             try:
-                with open(BUFFER_FILE, "r") as f:
+                with open(BUFFER_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 return []
 
     def _write_all(self, entries):
         with self.lock:
-            with open(BUFFER_FILE, "w") as f:
+            with open(BUFFER_FILE, "w", encoding="utf-8") as f:
                 json.dump(entries, f, indent=2)
 
     def save(self, batch):
@@ -78,7 +78,7 @@ class RetryBuffer:
             success = False
             try:
                 success = self.send_fn(batch)
-            except Exception as exc:
+            except OSError as exc:
                 log.warning(
                     "Retry failed for batch %s: %s",
                     batch.get("batch_id"), exc,

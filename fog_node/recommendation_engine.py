@@ -48,4 +48,40 @@ class RecommendationEngine:
                         "Move filament to a dry storage box or use a filament dryer."
                 })
 
+            elif alert_type == "Nozzle Temperature Trending Up":
+
+                recommendations.append({
+                    "alert": alert_type,
+                    "recommended_action":
+                        "Nozzle temperature is climbing steadily - monitor closely, "
+                        "no action needed yet unless it continues to rise."
+                })
+
+            elif alert_type == "Bed Temperature Trending Up":
+
+                recommendations.append({
+                    "alert": alert_type,
+                    "recommended_action":
+                        "Bed temperature is climbing steadily - monitor closely, "
+                        "no action needed yet unless it continues to rise."
+                })
+
+            elif alert_type == "Vibration Trending Up":
+
+                recommendations.append({
+                    "alert": alert_type,
+                    "recommended_action":
+                        "Vibration is increasing over recent readings - check for "
+                        "early signs of a loose belt or shifting load."
+                })
+
+            elif alert_type == "Humidity Trending Up":
+
+                recommendations.append({
+                    "alert": alert_type,
+                    "recommended_action":
+                        "Humidity is rising steadily - consider moving filament to "
+                        "dry storage before it crosses the safe threshold."
+                })
+
         return recommendations

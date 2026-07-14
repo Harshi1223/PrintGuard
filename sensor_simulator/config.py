@@ -66,6 +66,51 @@ MIN_LAYERS = 150
 MAX_LAYERS = 400
 
 # ----------------------------
+# Materials (additive - if a reading has no "material" field,
+# code always falls back to NORMAL_NOZZLE_TEMP / NOZZLE_OVERHEAT /
+# etc above, unchanged)
+# ----------------------------
+
+MATERIALS = {
+    "PLA": {
+        "normal_nozzle_temp": (195, 230),
+        "nozzle_overheat": (245, 265),
+        "normal_bed_temp": (55, 75),
+        "bed_overheat": (95, 110),
+    },
+    "ABS": {
+        "normal_nozzle_temp": (220, 250),
+        "nozzle_overheat": (265, 290),
+        "normal_bed_temp": (95, 110),
+        "bed_overheat": (120, 140),
+    },
+    "PETG": {
+        "normal_nozzle_temp": (220, 250),
+        "nozzle_overheat": (260, 280),
+        "normal_bed_temp": (70, 90),
+        "bed_overheat": (100, 120),
+    },
+}
+
+DEFAULT_MATERIAL = "PLA"  # used if a job doesn't specify one
+
+# ----------------------------
+# Job Queue (additive - replaces "pick a random job forever"
+# with "pull the next job from a shared queue, refill when empty")
+# ----------------------------
+
+JOB_QUEUE_SEED = [
+    {"job_name": "Phone Stand", "material": "PLA"},
+    {"job_name": "Gear Housing", "material": "ABS"},
+    {"job_name": "Camera Bracket", "material": "PETG"},
+    {"job_name": "Valve Cover", "material": "ABS"},
+    {"job_name": "Drone Frame", "material": "PETG"},
+    {"job_name": "Prototype Wheel", "material": "PLA"},
+    {"job_name": "Robot Arm", "material": "PETG"},
+    {"job_name": "Medical Clamp", "material": "PLA"},
+]
+
+# ----------------------------
 # MQTT
 # ----------------------------
 

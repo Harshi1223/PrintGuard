@@ -43,7 +43,8 @@ class Processor:
 
         message = json.dumps(data, sort_keys=True)
 
-        message_hash = hashlib.md5(
+        # Use a stronger hash (SHA-256) instead of MD5 for uniqueness/security
+        message_hash = hashlib.sha256(
             message.encode()
         ).hexdigest()
 
