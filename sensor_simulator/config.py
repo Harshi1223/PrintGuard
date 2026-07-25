@@ -6,11 +6,11 @@
 # Simulation
 # ----------------------------
 
-NUMBER_OF_PRINTERS = 3
+NUMBER_OF_PRINTERS = 5
 
 SAMPLING_INTERVAL = 2
 
-FAULT_PROBABILITY = 0.30
+FAULT_PROBABILITY = 0.05
 
 # ----------------------------
 # Printer Temperatures

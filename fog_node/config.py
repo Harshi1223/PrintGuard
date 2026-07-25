@@ -62,15 +62,46 @@ SQS_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/503148390993/printguard-bat
 API_GATEWAY_URL = "https://rrcpkz0lqb.execute-api.us-east-1.amazonaws.com/prod"
 
 # =====================================================
-# Health Thresholds
+# Health Thresholds (fallback - used only if a reading has
+# no "material" field, or an unrecognized one)
 # =====================================================
 
-NOZZLE_OVERHEAT_THRESHOLD = 240
+NOZZLE_OVERHEAT_THRESHOLD = 245
 
-BED_OVERHEAT_THRESHOLD = 90
+BED_OVERHEAT_THRESHOLD = 95
 
-LOW_FILAMENT_THRESHOLD = 15
+LOW_FILAMENT_THRESHOLD = 10
 
 HIGH_VIBRATION_THRESHOLD = 5
 
 HIGH_HUMIDITY_THRESHOLD = 70
+
+# =====================================================
+# Material-Aware Overheat Thresholds (additive)
+# -----------------------------------------------------
+# Different print materials have different normal operating
+# temperatures - PLA runs cooler than ABS/PETG. Using one fixed
+# global threshold for every material meant ABS/PETG printers could
+# be flagged "Nozzle Overheat" while still within their own normal
+# operating range. These values are each material's own overheat
+# threshold, matching the ranges used in sensor_simulator/config.py.
+# PLA's values match the previous fixed thresholds exactly, so PLA
+# behaviour is unchanged; only ABS/PETG behaviour is corrected.
+# =====================================================
+
+DEFAULT_MATERIAL = "PLA"
+
+MATERIAL_THRESHOLDS = {
+    "PLA": {
+        "nozzle_overheat": NOZZLE_OVERHEAT_THRESHOLD,
+        "bed_overheat": BED_OVERHEAT_THRESHOLD,
+    },
+    "ABS": {
+        "nozzle_overheat": 265,
+        "bed_overheat": 120,
+    },
+    "PETG": {
+        "nozzle_overheat": 260,
+        "bed_overheat": 100,
+    },
+}
