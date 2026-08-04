@@ -443,15 +443,17 @@
 </div>
 
 <script>
- 
+
+ //dashboard configuration
   const CONFIG = {
+    //API Gateway endpoint
         API_BASE_URL: "https://rrcpkz0lqb.execute-api.us-east-1.amazonaws.com/prod",
 
     // How often the dashboard re-polls the API, in milliseconds.
     POLL_INTERVAL_MS: 20000,
   };
   // ------------------------------------------------------------------
-
+//Maps printer health to colours.
   const STATUS_COLOR = {
     Healthy: "var(--healthy)",
     Warning: "var(--warning)",
@@ -470,6 +472,7 @@
   let pollTimer = null;
   const openHistoryCards = new Set(); // remembers which cards had history expanded across refreshes
 
+  //Checks whether API Gateway URL has been configured.
   function isConfigured() {
     return CONFIG.API_BASE_URL && !CONFIG.API_BASE_URL.includes("PASTE_YOUR");
   }

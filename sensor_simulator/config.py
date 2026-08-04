@@ -114,7 +114,7 @@ JOB_QUEUE_SEED = [
 # MQTT
 # ----------------------------
 
-MQTT_BROKER = "localhost"
+MQTT_BROKER = "3.223.160.117"
 
 MQTT_PORT = 1883
 
